@@ -1,41 +1,43 @@
 package ru.ncfu.selentar.view
 
 import javafx.beans.property.SimpleBooleanProperty
+import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleLongProperty
 import javafx.concurrent.Task
 import javafx.geometry.Pos
+import ru.ncfu.selentar.Learner
 import ru.ncfu.selentar.environment.Action
 import ru.ncfu.selentar.environment.Environment
-import ru.ncfu.selentar.environment.MapSurface
 import tornadofx.*
 import java.lang.IllegalStateException
-import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadPoolExecutor
 
-class MainView : View("Hello TornadoFX") {
+class MainView : View("Worldskills_2020") {
 
-    val environmentUi = find<EnvironmentUi>()
-    val env = Environment(environmentUi)
+    private val environmentUi = find<EnvironmentUi>()
+    private val env = Environment(environmentUi)
+    private val learner = Learner()
 
-    val executor = Executors.newCachedThreadPool()
+    private val visualizeSpeedProperty = SimpleLongProperty(1)
+    private val pauseProperty = SimpleBooleanProperty(false)
+    private val cancelledProperty = SimpleBooleanProperty(false)
 
-    val sleepProperty = SimpleLongProperty(1000)
-    val pauseProperty = SimpleBooleanProperty(false)
-    val cancelledProperty = SimpleBooleanProperty(false)
+    private val runDisableProperty = SimpleBooleanProperty(false)
+    private val startLearnDisableProperty = SimpleBooleanProperty(false)
+    private val stopLearnDisableProperty = SimpleBooleanProperty(false)
+    private val testDisableProperty = SimpleBooleanProperty(false)
+    private val leftDisableProperty = SimpleBooleanProperty(false)
+    private val rightDisableProperty = SimpleBooleanProperty(false)
+    private val forwardDisableProperty = SimpleBooleanProperty(false)
+    private val turnDisableProperty = SimpleBooleanProperty(false)
 
-    val runDisableProperty = SimpleBooleanProperty(false)
-    val startLearnDisableProperty = SimpleBooleanProperty(false)
-    val stopLearnDisableProperty = SimpleBooleanProperty(false)
-    val testDisableProperty = SimpleBooleanProperty(false)
-    val leftDisableProperty = SimpleBooleanProperty(false)
-    val rightDisableProperty = SimpleBooleanProperty(false)
-    val forwardDisableProperty = SimpleBooleanProperty(false)
-    val turnDisableProperty = SimpleBooleanProperty(false)
+    private val iterationProperty = SimpleIntegerProperty(1)
+    private val learnerIterationProperty = SimpleIntegerProperty(0)
+    private val timeProperty = SimpleIntegerProperty(0)
+    private val bestTimeProperty = SimpleIntegerProperty(0)
 
-    var startTask: Task<*> = FXTask() {}
-    var testTask: Task<*> = FXTask() {}
+    private var startTask: Task<*> = FXTask() {}
+    private var testTask: Task<*> = FXTask() {}
+    private var learnTask: Task<*> = FXTask() {}
 
     override val root = borderpane {
         left {
@@ -49,9 +51,9 @@ class MainView : View("Hello TornadoFX") {
                     disableProperty().bind(runDisableProperty)
                     action {
                         startTask = runAsyncWithProgress {
-                            while (env.getObservation().forward == MapSurface.ROAD && !startTask.isCancelled) {
-                                doMove(Action.MOVE_FORWARD)
-                                Thread.sleep(sleepProperty.value)
+                            while (!env.canceled && !startTask.isCancelled) {
+                                doMove(learner.getAction(env.getObservation()))
+                                Thread.sleep(visualizeSpeedProperty.value)
                             }
                         }
                     }
@@ -60,23 +62,9 @@ class MainView : View("Hello TornadoFX") {
                 button("Стоп") {
                     prefWidth = 150.0
                     action {
-                        startTask.cancel()
-                        testTask.cancel()
-
-                        executor.shutdown()
-                        pauseProperty.value = false
-
-                        runDisableProperty.value = false
                         startLearnDisableProperty.value = false
                         stopLearnDisableProperty.value = false
-                        testDisableProperty.value = false
-                        leftDisableProperty.value = false
-                        rightDisableProperty.value = false
-                        forwardDisableProperty.value = false
-                        turnDisableProperty.value = false
-
-                        env.reset()
-                        env.render()
+                        reset()
                     }
                 }
 
@@ -99,11 +87,41 @@ class MainView : View("Hello TornadoFX") {
                 button("Запуск обучения") {
                     prefWidth = 150.0
                     disableProperty().bind(startLearnDisableProperty)
+
+                    action {
+                        startLearnDisableProperty.value = true
+                        learnTask = runAsyncWithProgress {
+                            while (!learnTask.isCancelled) {
+                                val iter = learner.atomicIteration.addAndGet(1)
+                                runLater {
+                                    learnerIterationProperty.value = iter
+                                }
+
+                                var observation = env.getObservation()
+                                while (!observation.canceled) {
+                                    val action = learner.getAction(observation)
+                                    doMove(action)
+
+                                    val newObservation = env.getObservation()
+                                    learner.learn(observation, action, newObservation)
+
+                                    Thread.sleep(visualizeSpeedProperty.value)
+                                    observation = newObservation
+                                }
+
+                                reset()
+                            }
+                        }
+                    }
                 }
 
                 button("Остановка обучения") {
                     prefWidth = 150.0
                     disableProperty().bind(stopLearnDisableProperty)
+                    action {
+                        learnTask.cancel()
+                        startLearnDisableProperty.value = false
+                    }
                 }
 
                 button("Тест управления") {
@@ -112,22 +130,56 @@ class MainView : View("Hello TornadoFX") {
                     action {
                         testTask = runAsyncWithProgress {
                             doMove(Action.MOVE_FORWARD, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN_LEFT, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN_RIGHT, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN_RIGHT, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN_LEFT, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
 
                             doMove(Action.MOVE_FORWARD, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
                             doMove(Action.TURN, test = true)
-                            Thread.sleep(sleepProperty.value)
+                            Thread.sleep(visualizeSpeedProperty.value)
+                        }
+                    }
+                }
+
+                form {
+                    fieldset {
+                        field {
+                            label("Итерация: ")
+                            label(iterationProperty)
+                        }
+
+                        field {
+                            label("Итерация обучения: ")
+                            label(learnerIterationProperty)
+                        }
+
+                        field {
+                            label("Время: ")
+                            label(timeProperty)
+                        }
+
+                        field {
+                            label("Лучшее время: ")
+                            label(bestTimeProperty)
+                        }
+
+                        field {
+                            vbox {
+                                label("Скорость визуализации: ")
+                                hbox {
+                                    textfield(visualizeSpeedProperty)
+                                    label(" мс.")
+                                }
+                            }
                         }
                     }
                 }
@@ -188,12 +240,33 @@ class MainView : View("Hello TornadoFX") {
         env.render()
     }
 
+    private fun reset() {
+        startTask.cancel()
+        testTask.cancel()
+
+        env.reset()
+        env.render()
+
+        runLater {
+            pauseProperty.value = false
+            runDisableProperty.value = false
+            testDisableProperty.value = false
+            leftDisableProperty.value = false
+            rightDisableProperty.value = false
+            forwardDisableProperty.value = false
+            turnDisableProperty.value = false
+
+            bestTimeProperty.value = env.atomicBestTime.get()
+            iterationProperty.value = env.atomicIteration.get()
+        }
+    }
+
     private fun doMove(action: Action, test: Boolean = false) {
         val task = task {
             while (pauseProperty.value) {
                 if (cancelledProperty.value) return@task
                 if (isCancelled) return@task
-                Thread.sleep(sleepProperty.value)
+                Thread.sleep(visualizeSpeedProperty.value)
             }
 
             try {
@@ -201,14 +274,18 @@ class MainView : View("Hello TornadoFX") {
             } catch (e: IllegalStateException) {
                 runLater {
                     val result = if (env.getObservation().finished) "Вы выйграли!" else "Вы проиграли!"
-                    tornadofx.error("Эксперимент уже закончился! ${result}", env.getObservation().toString())
+                    error("Эксперимент уже закончился! $result", env.getObservation().toString())
                 }
             }
 
             env.render()
+
+            runLater {
+                timeProperty.value = env.atomicTime.get()
+            }
         }
 
         task.get()
-        println(env.getObservation())
+        //println("DEBUG: " + env.getObservation())
     }
 }

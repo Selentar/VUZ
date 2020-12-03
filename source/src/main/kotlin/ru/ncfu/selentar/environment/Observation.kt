@@ -7,5 +7,7 @@ data class Observation(
     val canceled: Boolean,
     val finished: Boolean,
     val lost: Boolean,
-    val time: Int
+    val time: Int,
+    val startCount: Int,
+    val turnsCount: Int
     )
