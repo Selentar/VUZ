@@ -22,7 +22,7 @@ class Environment(val mapUi: EnvironmentUi) {
     var atomicIteration = AtomicInteger(1)
     var atomicTime = AtomicInteger(0)
     var atomicBestTime = AtomicInteger(-1)
-    var turnsCount = 0
+    var turnsCount = AtomicInteger(0)
     var canceled = false
     var finished = false
     var lost = false
@@ -32,7 +32,7 @@ class Environment(val mapUi: EnvironmentUi) {
         car.direction = startDirection
         atomicTime.set(0)
         atomicIteration.addAndGet(1)
-        turnsCount = 0
+        turnsCount.set(0)
         canceled = false
         finished = false
         lost = false
@@ -79,7 +79,7 @@ class Environment(val mapUi: EnvironmentUi) {
 
         atomicTime.addAndGet(1)
         if (action != Action.MOVE_FORWARD) {
-            turnsCount++
+            turnsCount.addAndGet(1)
         }
         setState()
     }
@@ -105,8 +105,8 @@ class Environment(val mapUi: EnvironmentUi) {
             finished = finished,
             lost = lost,
             time = atomicTime.get(),
-            startCount = atomicIteration.get(),
-            turnsCount = turnsCount
+            iteration = atomicIteration.get(),
+            turnsCount = turnsCount.get()
         )
     }
 

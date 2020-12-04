@@ -8,6 +8,6 @@ data class Observation(
     val finished: Boolean,
     val lost: Boolean,
     val time: Int,
-    val startCount: Int,
+    val iteration: Int,
     val turnsCount: Int
     )

@@ -23,7 +23,9 @@ class Learner {
      */
     val qTable = Array(12) { Array(13) { Array(4) { Array(4) { 20.0 } } } }
 
-    fun getAction(observation: Observation) : Action {
+    fun getAction(observation: Observation, isLearning: Boolean = true) : Action {
+        if (!isLearning) return getActionFromQTable(observation)
+
         val action = if (randomizer.nextDouble() > epsilon) {
             getActionFromQTable(observation)
         } else {
